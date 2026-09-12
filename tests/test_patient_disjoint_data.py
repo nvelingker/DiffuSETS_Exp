@@ -14,6 +14,7 @@ from paper_repro.common import patient_split
 from paper_repro.config import load_config
 from paper_repro.data import (
     DiffuSETSDataset,
+    ExactDistributedTrainSampler,
     PaddedDistributedInferenceSampler,
     load_manifest,
     metadata_heart_rate_from_rr_ms,
@@ -149,6 +150,35 @@ def test_inference_sampler_marks_empty_ranks_as_padding() -> None:
     assert list(PaddedDistributedInferenceSampler(2, rank=2, world_size=4)) == [
         (0, False)
     ]
+
+
+def test_train_sampler_has_exact_disjoint_coverage_and_stable_shuffle() -> None:
+    shards = [
+        list(ExactDistributedTrainSampler(23, rank, 4, shuffle=False, seed=2026))
+        for rank in range(4)
+    ]
+    assert sorted(index for shard in shards for index in shard) == list(range(23))
+    assert (
+        sum(
+            len(set(left) & set(right))
+            for left in shards
+            for right in shards
+            if left is not right
+        )
+        == 0
+    )
+
+    shuffled = [
+        ExactDistributedTrainSampler(23, rank, 4, shuffle=True, seed=2026)
+        for rank in range(4)
+    ]
+    epoch_zero = [list(sampler) for sampler in shuffled]
+    for sampler in shuffled:
+        sampler.set_epoch(1)
+    epoch_one = [list(sampler) for sampler in shuffled]
+    assert sorted(index for shard in epoch_zero for index in shard) == list(range(23))
+    assert sorted(index for shard in epoch_one for index in shard) == list(range(23))
+    assert epoch_zero != epoch_one
 
 
 def test_production_config_locks_released_vae_criteria(tmp_path: Path) -> None:

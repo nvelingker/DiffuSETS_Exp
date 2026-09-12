@@ -41,6 +41,16 @@ class ParallelContext:
         dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
         return float(tensor.item())
 
+    def require_equal(self, value: int, *, label: str) -> None:
+        minimum = torch.tensor(value, device=self.device, dtype=torch.int64)
+        maximum = minimum.clone()
+        dist.all_reduce(minimum, op=dist.ReduceOp.MIN)
+        dist.all_reduce(maximum, op=dist.ReduceOp.MAX)
+        if minimum.item() != maximum.item():
+            raise ValueError(
+                f"{label} differs across ranks: min={minimum.item()}, max={maximum.item()}"
+            )
+
 
 def require_torch_214() -> None:
     if not torch.__version__.startswith("2.14."):

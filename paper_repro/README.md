@@ -98,6 +98,12 @@ FP32 is intentional: the released scripts do not enable mixed precision, and
 PyTorch 2.14 FSDP2 parameter-only BF16 casting is incompatible with the
 released CLIP BatchNorm FP32 running buffers.
 
+Training samplers shard one deterministic global order without padding: every
+training record appears exactly once per epoch, with no repeated records added
+to make rank lengths equal. The fixed production counts still give every rank
+the same number of collective steps. The uneven final batch is weighted by its
+true rank-local record count before FSDP's gradient average.
+
 ## FSDP2 implementation
 
 Run with `/home/nvelingker/.conda/envs/ecgdiff/bin/python`, currently PyTorch

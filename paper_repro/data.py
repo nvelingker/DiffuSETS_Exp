@@ -496,6 +496,47 @@ class DiffuSETSDataset(Dataset[dict[str, torch.Tensor]]):
         return item
 
 
+class ExactDistributedTrainSampler(Sampler[int]):
+    """Disjoint rank shards with no duplicated or dropped training records."""
+
+    def __init__(
+        self,
+        dataset_size: int,
+        rank: int,
+        world_size: int,
+        *,
+        shuffle: bool,
+        seed: int,
+    ) -> None:
+        if dataset_size <= 0 or not 0 <= rank < world_size:
+            raise ValueError("invalid distributed training sampler dimensions")
+        self.dataset_size = dataset_size
+        self.rank = rank
+        self.world_size = world_size
+        self.shuffle = shuffle
+        self.seed = seed
+        self.epoch = 0
+
+    def __len__(self) -> int:
+        if self.rank >= self.dataset_size:
+            return 0
+        return (self.dataset_size - 1 - self.rank) // self.world_size + 1
+
+    def __iter__(self) -> Iterator[int]:
+        if self.shuffle:
+            generator = torch.Generator()
+            generator.manual_seed(self.seed + self.epoch)
+            indices = torch.randperm(
+                self.dataset_size, generator=generator, dtype=torch.int64
+            ).tolist()
+        else:
+            indices = range(self.dataset_size)
+        return iter(indices[self.rank :: self.world_size])
+
+    def set_epoch(self, epoch: int) -> None:
+        self.epoch = epoch
+
+
 class PaddedDistributedInferenceSampler(Sampler[tuple[int, bool]]):
     """Equal-length rank shards with explicit padding flags for collective inference."""
 

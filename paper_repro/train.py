@@ -14,7 +14,7 @@ import torch
 import torch.nn.functional as F
 from diffusers import DDPMScheduler
 from torch import nn
-from torch.utils.data import DataLoader, DistributedSampler
+from torch.utils.data import DataLoader
 
 from clip.clip_model import CLIP
 from paper_repro.checkpoint import (
@@ -29,6 +29,7 @@ from paper_repro.common import atomic_json_dump, seed_everything, sha256_file
 from paper_repro.config import ReproConfig, load_config, require_global_batch
 from paper_repro.data import (
     DiffuSETSDataset,
+    ExactDistributedTrainSampler,
     IndexedDataset,
     PaddedDistributedInferenceSampler,
     load_manifest,
@@ -179,16 +180,13 @@ def _loader(
     seed: int,
     shuffle: bool,
     workers: int,
-) -> tuple[
-    DataLoader[dict[str, torch.Tensor]], DistributedSampler[dict[str, torch.Tensor]]
-]:
-    sampler: DistributedSampler[dict[str, torch.Tensor]] = DistributedSampler(
-        dataset,
-        num_replicas=parallel.world_size,
-        rank=parallel.rank,
+) -> tuple[DataLoader[dict[str, torch.Tensor]], ExactDistributedTrainSampler]:
+    sampler = ExactDistributedTrainSampler(
+        len(dataset),
+        parallel.rank,
+        parallel.world_size,
         shuffle=shuffle,
         seed=seed,
-        drop_last=False,
     )
     loader = DataLoader(
         dataset,
@@ -199,6 +197,7 @@ def _loader(
         persistent_workers=workers > 0,
         drop_last=False,
     )
+    parallel.require_equal(len(loader), label="training DataLoader step count")
     return loader, sampler
 
 
@@ -353,6 +352,19 @@ def _stage_epochs(configured: int, maximum: int | None) -> int:
     return min(configured, maximum)
 
 
+def _final_batch_rank_scale(
+    local_examples: int, *, is_final: bool, parallel: ParallelContext
+) -> float:
+    """Correct FSDP's rank average for an uneven, unpadded final batch."""
+
+    if not is_final:
+        return 1.0
+    global_examples = parallel.sum(local_examples)
+    if global_examples <= 0:
+        raise ValueError("final distributed batch is empty")
+    return parallel.world_size * local_examples / global_examples
+
+
 def train_vae(
     config: ReproConfig,
     parallel: ParallelContext,
@@ -454,7 +466,7 @@ def train_vae(
         model.train()
         weighted_loss = weighted_mse = weighted_kl = examples = 0.0
         kld_weight = epoch / configured_epochs
-        for batch in loader:
+        for batch_index, batch in enumerate(loader):
             waveform = batch["waveform"].to(parallel.device, non_blocking=True)
             optimizer.zero_grad(set_to_none=True)
             set_last_backward(model, True)
@@ -462,7 +474,12 @@ def train_vae(
             losses = loss_function(
                 reconstruction, waveform, mean, log_variance, kld_weight
             )
-            losses["loss"].backward()
+            gradient_scale = _final_batch_rank_scale(
+                len(waveform),
+                is_final=batch_index == len(loader) - 1,
+                parallel=parallel,
+            )
+            (losses["loss"] * gradient_scale).backward()
             optimizer.step()
             scheduler.step()
             count = float(len(waveform))
@@ -842,9 +859,17 @@ def train_clip(
         model.train()
         local_weighted_loss = 0.0
         local_examples = 0
-        for group in _buffered_batches(train_loader, accumulation_steps):
+        optimizer_groups = math.ceil(len(train_loader) / accumulation_steps)
+        for group_index, group in enumerate(
+            _buffered_batches(train_loader, accumulation_steps)
+        ):
             optimizer.zero_grad(set_to_none=True)
             group_examples = sum(len(batch["latent"]) for batch in group)
+            rank_scale = _final_batch_rank_scale(
+                group_examples,
+                is_final=group_index == optimizer_groups - 1,
+                parallel=parallel,
+            )
             for index, batch in enumerate(group):
                 latent = batch["latent"].to(parallel.device, non_blocking=True)
                 text = batch["text_embedding"].to(parallel.device, non_blocking=True)
@@ -862,7 +887,7 @@ def train_clip(
                     criterion(logits_signal, labels) + criterion(logits_text, labels)
                 ) / 2
                 weight = len(latent) / group_examples
-                (loss * weight).backward()
+                (loss * weight * rank_scale).backward()
                 local_weighted_loss += float(loss.detach()) * len(latent)
                 local_examples += len(latent)
             optimizer.step()
@@ -1046,7 +1071,7 @@ def train_diffusion(
         sampler.set_epoch(epoch)
         model.train()
         weighted_loss = examples = 0.0
-        for batch in loader:
+        for batch_index, batch in enumerate(loader):
             latent = batch["latent"].to(parallel.device, non_blocking=True)
             text, condition = _condition_tensors(batch, parallel.device)
             timesteps = torch.randint(
@@ -1063,7 +1088,12 @@ def train_diffusion(
             loss = F.mse_loss(prediction.float(), noise.float(), reduction="sum").div(
                 len(noise)
             )
-            loss.backward()
+            gradient_scale = _final_batch_rank_scale(
+                len(latent),
+                is_final=batch_index == len(loader) - 1,
+                parallel=parallel,
+            )
+            (loss * gradient_scale).backward()
             optimizer.step()
             scheduler.step()
             weighted_loss += float(loss.detach()) * len(latent)
