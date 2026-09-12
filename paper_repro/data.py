@@ -93,15 +93,6 @@ def build_patient_disjoint_manifest(
     output_dir = paths["artifact_root"]
     output_path = paths["manifest"]
     audit_path = output_dir / "manifest_audit.json"
-    if output_path.exists() and audit_path.exists() and not overwrite:
-        with audit_path.open(encoding="utf-8") as handle:
-            audit = json.load(handle)
-        if audit.get("manifest_sha256") != sha256_file(output_path):
-            raise ValueError(
-                "existing manifest does not match its audit; pass --overwrite to rebuild"
-            )
-        return audit
-
     hashes = data.get("source_sha256", {})
     source_hashes = {
         "record_list": _require_hash(
@@ -133,6 +124,33 @@ def build_patient_disjoint_manifest(
             "released conditioning cache",
         ),
     }
+
+    if output_path.exists() and audit_path.exists() and not overwrite:
+        with audit_path.open(encoding="utf-8") as handle:
+            audit = json.load(handle)
+        if audit.get("manifest_sha256") != sha256_file(output_path):
+            raise ValueError(
+                "existing manifest does not match its audit; pass --overwrite to rebuild"
+            )
+        if audit.get("source_sha256") != source_hashes:
+            raise ValueError("existing manifest audit does not match current sources")
+        expected_counts = data.get("expected_counts", {})
+        if expected_counts and audit.get("roles") != expected_counts:
+            raise ValueError("existing manifest audit has unexpected split counts")
+        policy = audit.get("split_policy", {})
+        if (
+            policy.get("seed") != int(data["split_seed"])
+            or policy.get("train_fraction") != float(data["train_fraction"])
+            or policy.get("validation_fraction") != float(data["validation_fraction"])
+        ):
+            raise ValueError("existing manifest audit has a different split policy")
+        if audit.get("quality_excluded_record_ids") != sorted(
+            int(value) for value in data.get("quality_excluded_record_ids", [])
+        ):
+            raise ValueError("existing manifest audit has different quality exclusions")
+        if any(audit.get("patient_overlap", {}).values()):
+            raise ValueError("existing manifest audit records patient contamination")
+        return audit
 
     records = pd.read_csv(
         paths["record_list"],
