@@ -12,5 +12,12 @@ checkpoints/*
 exp/
 figures/
 .DS_Store
-.zip
+*.zip
 .vscode
+/prerequistes
+
+# Clean patient-disjoint reproduction: keep source configuration, not outputs.
+!config/patient_disjoint_fsdp2.json
+paper_repro/artifacts/
+paper_repro/runs/
+paper_repro/smoke/

@@ -22,6 +22,9 @@ python -m test_scripts.diversity
 
 ## Training
 
+For the local leakage-free, patient-disjoint retraining path with PyTorch 2.14
+FSDP2, see [`paper_repro/README.md`](paper_repro/README.md).
+
 Training script is `DiffuSETS_train.py`, can be launched through 
 
 ```sh

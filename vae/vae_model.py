@@ -37,7 +37,7 @@ class SelfAttention(nn.Module):
             mask = torch.ones_like(weight, dtype=torch.bool).triu(1)
             weight.masked_fill_(mask, -torch.inf)
         
-        weight /= math.sqrt(self.d_head)
+        weight = weight / math.sqrt(self.d_head)
         weight = F.softmax(weight, dim=-1)
 
         # (B, H, S, S) @ (B, H, S, D/H) -> (B, H, S, D/H)
@@ -71,7 +71,7 @@ class VAE_AttentionBlock(nn.Module):
         x = self.attention(x)
         x = x.transpose(-1, -2)
         
-        x += residue
+        x = x + residue
         return x
 
 class VAE_ResidualBlock(nn.Module):
@@ -172,9 +172,9 @@ class VAE_Encoder(nn.Sequential):
         x = mean + stdev * noise
 
         # Scale the output by a constant (magic number)
-        x *= 0.18215
+        x = x * 0.18215
 
-        return x, mean, log_variance
+        return x, mean.clone(), log_variance
 
 
 class VAE_Decoder(nn.Sequential):
@@ -226,18 +226,18 @@ class VAE_Decoder(nn.Sequential):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # x: (B, 4, L/8)
 
-        x /= 0.18215
+        x = x / 0.18215
 
         for module in self:
             x = module(x)
 
         # (B, 12, L) -> (B, L, 12)
-        x = x.transpose(1, 2)
+        x = x.transpose(1, 2).contiguous()
         return x
 
 
 def loss_function(recons, x, mu, log_var, kld_weight=1) -> dict:
-    """
+    r"""
     Computes the VAE loss function.
     KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
     :para recons: reconstruction vector

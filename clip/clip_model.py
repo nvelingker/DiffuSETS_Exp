@@ -206,7 +206,7 @@ class BasicBlock(nn.Module):
             identity = identity.transpose(-1,-2)
         
         # shortcut
-        out += identity
+        out = out + identity
 
         return out
 

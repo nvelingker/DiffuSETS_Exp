@@ -12,6 +12,20 @@ import wfdb
 from wfdb import processing
 
 
+def heart_rate_from_rr_interval(rr_interval_ms, fallback_detector):
+    """Use valid millisecond RR metadata, otherwise run the supplied detector."""
+    try:
+        rr_interval_ms = float(rr_interval_ms)
+    except (TypeError, ValueError):
+        rr_interval_ms = np.nan
+    if np.isfinite(rr_interval_ms) and 300.0 <= rr_interval_ms <= 1500.0:
+        return 60000.0 / rr_interval_ms
+    heart_rate = fallback_detector()
+    if heart_rate is None or not np.isfinite(heart_rate) or heart_rate <= 0:
+        raise ValueError("invalid RR interval and XQRS could not estimate heart rate")
+    return float(heart_rate)
+
+
 class MIMIC_IV_ECG_Dataset(Dataset):
     def __init__(self,
                  dataset_path: str, 
@@ -98,26 +112,27 @@ class MIMIC_IV_ECG_Dataset(Dataset):
         texts = [self.sheet.iloc[idx][f'report_{x}'] for x in range(18)]
         text = self._text_preprocess(texts)
 
-        rr_interval = self.sheet.iloc[idx]['rr_interval'] / 1000.0
+        rr_interval_ms = self.sheet.iloc[idx]['rr_interval']
 
-        # abnormal rr interval manually calculate 
-        if rr_interval < 300 or rr_interval > 1500:
+        def detect_heart_rate():
             heart_rate = None
             for lead in range(12):
                 xqrs = processing.XQRS(sig=sig[:, lead], fs=fields['fs'])
-                xqrs.detect(verbose=False)
+                try:
+                    xqrs.detect(verbose=False)
+                except Exception:
+                    continue
                 qrs_inds = xqrs.qrs_inds
                 if len(qrs_inds) > 1:
                     rr_intervals = np.diff(qrs_inds) / fields['fs']
                     heart_rate = 60 / np.mean(rr_intervals)
                     break
-            # Abort this data in later process
-            # if heart_rate is None:
-            #     heart_rate = 99999
-            assert heart_rate is not None
-                
-        else:
-            heart_rate = 60.0 / rr_intervals
+            return heart_rate
+
+        # MIMIC rr_interval is in milliseconds. The released branch divided
+        # it by 1,000 before applying millisecond bounds and then referenced an
+        # undefined rr_intervals variable for valid metadata.
+        heart_rate = heart_rate_from_rr_interval(rr_interval_ms, detect_heart_rate)
 
         label_dict = {
                 'text': text, 

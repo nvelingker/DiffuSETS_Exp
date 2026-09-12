@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "paths": {
+    "ecg_root": "/home/nvelingker/common-data/arpa-h/ca/mimic-iv-ecg",
+    "record_list": "/home/nvelingker/common-data/arpa-h/ca/mimic-iv-ecg/record_list.csv",
+    "machine_measurements": "/home/nvelingker/common-data/arpa-h/ca/mimic-iv-ecg/machine_measurements.csv",
+    "shared_manifest": "../SE-Diff/data/mimic_iv_ecg_repo1040/manifest.csv",
+    "exclude_list": "paper_repro/resources/exclude_list.txt",
+    "ecgdiff_prepared_manifest": "../artifacts/ecgdiff/data/diffusets_mimic_ours_vae_mean_v3/manifest.parquet",
+    "dense_conditioning": "../artifacts/ecgdiff/conditioning/diffusets_mimic_ada002_dense_v1/dense_conditioning_float32.npy",
+    "artifact_root": "paper_repro/artifacts/patient_disjoint_v1",
+    "manifest": "paper_repro/artifacts/patient_disjoint_v1/manifest.parquet",
+    "waveforms": "paper_repro/artifacts/patient_disjoint_v1/waveforms_float32.npy",
+    "waveform_status": "paper_repro/artifacts/patient_disjoint_v1/waveform_status_uint8.npy",
+    "heart_rate": "paper_repro/artifacts/patient_disjoint_v1/heart_rate_float32.npy",
+    "heart_rate_source": "paper_repro/artifacts/patient_disjoint_v1/heart_rate_source_uint8.npy",
+    "posterior_noise": "paper_repro/artifacts/patient_disjoint_v1/posterior_noise_float32.npy",
+    "latent": "paper_repro/artifacts/patient_disjoint_v1/latents_float32.npy",
+    "latent_status": "paper_repro/artifacts/patient_disjoint_v1/latent_status_uint8.npy",
+    "run_root": "paper_repro/runs/patient_disjoint_seed2026",
+    "vae_checkpoint": "paper_repro/runs/patient_disjoint_seed2026/vae/portable/VAE_model_ep9.pth",
+    "clip_checkpoint": "paper_repro/runs/patient_disjoint_seed2026/clip/portable/clip_best.pth",
+    "diffusion_checkpoint": "paper_repro/runs/patient_disjoint_seed2026/diffusion/portable/unet_best.pth"
+  },
+  "data": {
+    "split_seed": 2026,
+    "train_fraction": 0.7,
+    "validation_fraction": 0.1,
+    "source_sample_rate_hz": 500.0,
+    "target_samples": 1024,
+    "lead_order": ["I", "II", "III", "aVR", "aVF", "aVL", "V1", "V2", "V3", "V4", "V5", "V6"],
+    "quality_excluded_record_ids": [42422107, 48500808, 42743706, 44145272],
+    "posterior_noise_seed": 2026,
+    "encode_batch_size_per_rank": 256,
+    "expected_counts": {
+      "train": {"records": 556309, "patients": 111791},
+      "val": {"records": 79103, "patients": 15890},
+      "test": {"records": 158956, "patients": 31901}
+    },
+    "source_sha256": {
+      "record_list": "b6f113023e955406e924a9ce10c1108f3bf8080e14cfe2f3ba3a2e858ebb621b",
+      "machine_measurements": "56f6b1413221bce95bd6f48b28ca1acf27ae0b073d6f2c1d12f3af7500eabbb6",
+      "shared_manifest": "e7d55fc0a1f0393c3b6777b8a7187696e954679f8acbabb65dbe06a41117a047",
+      "exclude_list": "cb896da54e96fa8114beefeb056217d89e3ee9a57f862561df0fbe2243de9bd8",
+      "ecgdiff_prepared_manifest": "aff51910c357e4ac079dca2a36ba0f8989adf973815b68b0c408481f9a468656",
+      "dense_conditioning": "83dfc7e8a17022713277923df4c733c962eb4e9254c926fbf533879418cb5b97"
+    }
+  },
+  "distributed": {
+    "backend": "nccl",
+    "parameter_dtype": "float32",
+    "reduce_dtype": "float32",
+    "num_workers_per_rank": 4
+  },
+  "vae": {
+    "seed": 2026,
+    "epochs": 10,
+    "global_batch_size": 256,
+    "lr": 0.0001,
+    "max_lr": 0.0002,
+    "save_after_zero_based_epoch": 5
+  },
+  "clip": {
+    "seed": 2026,
+    "embed_dim": 64,
+    "epochs": 10,
+    "lr": 0.001,
+    "weight_decay": 0.001,
+    "contrastive_batch_size_per_rank": 256,
+    "global_optimizer_batch_size": 16384,
+    "validation_batch_size_per_rank": 32
+  },
+  "diffusion": {
+    "seed": 2026,
+    "epochs": 200,
+    "global_batch_size": 2048,
+    "lr": 0.0001,
+    "num_train_steps": 1000,
+    "unet_kernel_size": 7,
+    "unet_num_levels": 7,
+    "beta_start": 0.00085,
+    "beta_end": 0.012,
+    "initial_best_loss": 50.0,
+    "save_every_epochs": 50
+  }
+}
