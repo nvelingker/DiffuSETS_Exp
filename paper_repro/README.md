@@ -211,3 +211,31 @@ training lead order inside the evaluator. Its FID, manifold precision/recall,
 CLIP, rCLIP, and rFID outputs must be labeled
 `DiffuSETS-clean-CLIP64 seed2026`; they remain a bespoke sensitivity analysis,
 not a model-independent ranking.
+
+## Full test comparison
+
+The completed comparison uses the entire 2,149-record/419-patient MIMIC panel
+and the fixed 1,000-record/991-patient PTB-XL panel. Each clean DiffuSETS
+condition uses base seed `20260822` plus its zero-based row position. ECGDiff is
+locked to epoch 16/step 4,624 and SE-Diff to v3 seed-2026 raw epoch 195.
+
+Run every model-agnostic, morphology, and clean-CLIP64 scorer and regenerate the
+hash-checked reports with:
+
+```bash
+cd /home/nvelingker/arpa-h/diffusion/DiffuSETS_Exp
+scripts/evaluate_clean_test_comparison.sh
+```
+
+The scorer uses 1,000 patient-bootstrap replicates with seed `20260903`; the
+aggregator additionally computes 10,000 paired patient-bootstrap replicates
+with seed `20260914`. Set `CLIP_DEVICE=cuda:0` to run only the small learned
+evaluator on a free GPU; its default is CPU.
+
+The registered human-readable report is
+[`COMPLETED_EVALUATION_SEED2026.md`](COMPLETED_EVALUATION_SEED2026.md). The full
+machine-readable output and per-record scores live under
+`paper_repro/evaluation/clean_seed2026_e200_base20260822_v1/` and remain local
+because waveform/evaluation artifacts are gitignored. Re-run
+`paper_repro.summarize_evaluation` to verify every checkpoint, condition,
+waveform, scorer, and per-record-artifact hash before using a number.

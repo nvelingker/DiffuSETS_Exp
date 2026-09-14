@@ -72,6 +72,11 @@ the undefined `rr_intervals` fallback variable.
 | CLIP64 | seed 2026; 10 epochs; embed 64; rank-local contrastive batch 256; global optimizer batch 16,384; AdamW `1e-3`, weight decay `1e-3`; shuffled; validation-only selection | best epoch 2, step 68; validation cosine 0.840531 |
 | diffusion | seed 2026; 200 epochs; global batch 2,048; AdamW `1e-4`; cosine LR to `1e-5`; 1,000 DDPM steps; beta `0.00085--0.012`; kernel 7, seven levels; timesteps 1--998; unshuffled | best/final epoch 200, step 54,400; training loss 47.314717 |
 
+The diffusion batch is the released `config/all.json` value of 2,048. FSDP2
+preserved it as one global batch of 256 records on each of eight ranks; it did
+not multiply the author batch by the world size. The clean run has fewer steps
+per epoch because only its 556,309 training records receive gradients.
+
 The VAE's 10 epochs come from the released training script; the paper does not
 state the VAE epoch count. Its criterion was intentionally unchanged. Measured
 stage times were about 1 h 6 min for VAE, 12 min 32 s for CLIP, and 4 h 54 min
@@ -122,7 +127,9 @@ Check the checkpoint hashes before loading. Also require the same config and
 manifest hashes in all three provenance objects, the VAE hash in the CLIP
 provenance and latent summary, and the latent hash in the diffusion provenance.
 
-The selected suite has not yet produced a registered clean MIMIC or PTB-XL
-generation panel. Existing `exp/batch/*` outputs and tables use released
-weights and remain historical. Generate a fresh artifact with the clean U-Net,
-decode it with the clean VAE, and use the clean CLIP64 for learned metrics.
+The selected suite produced its registered clean MIMIC and PTB-XL panels on
+2026-09-14. Their full same-scorer comparison, exact hashes, patient-bootstrap
+intervals, and interpretation are recorded in
+[`COMPLETED_EVALUATION_SEED2026.md`](COMPLETED_EVALUATION_SEED2026.md).
+Existing `exp/batch/*` outputs and older tables use released weights and remain
+historical.
