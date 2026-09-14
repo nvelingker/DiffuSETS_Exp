@@ -162,3 +162,52 @@ CPU/static tests use:
 ```bash
 /home/nvelingker/.conda/envs/ecgdiff/bin/python -m pytest -q tests
 ```
+
+## Clean test inference and learned scoring
+
+`paper_repro/infer.py` is the only registered generation path for the clean
+suite. It rejects any VAE or U-Net other than the hash-bound seed-2026 files,
+requires a clean Git checkout, preserves one deterministic random stream per
+condition, and uses the released 1,000-step ancestral DDPM defaults. The
+decoder emits the raw DiffuSETS lead order with `aVF` before `aVL`; the adapter
+swaps those two channels before saving the canonical comparison order
+`I, II, III, aVR, aVL, aVF, V1--V6`.
+
+The MIMIC comparison contains all 2,149 native test records from the selected
+ECGDiff e16 run, representing 419 held-out patients. Its records map one-to-one
+to the clean DiffuSETS test role, and its 1,536-dimensional text inputs match
+the clean cache bit-for-bit. The external PTB-XL comparison retains the fixed
+1,000-record/991-patient local cohort and its recovered saved ada-002 inputs.
+
+Run MIMIC on eight GPUs with:
+
+```bash
+CUDA_VISIBLE_DEVICES=2,3,4,5,6,7,8,9 \
+  /home/nvelingker/.conda/envs/ecgdiff/bin/torchrun \
+  --standalone --nproc-per-node=8 -m paper_repro.infer \
+  --condition-source clean-mimic \
+  --condition-dir ../SE-Diff/data/mimic_iv_ecg_reconstruction_v3/evaluation/seed_2026_best_e0195_mimic_intersection2149_epoch16_step4624_v1/conditions \
+  --output-dir paper_repro/evaluation/clean_seed2026_e200_base20260822_v1/mimic \
+  --base-seed 20260822 --batch-size-per-rank 512
+```
+
+Run the fixed PTB-XL panel with:
+
+```bash
+CUDA_VISIBLE_DEVICES=2,3,4,5,6,7,8,9 \
+  /home/nvelingker/.conda/envs/ecgdiff/bin/torchrun \
+  --standalone --nproc-per-node=8 -m paper_repro.infer \
+  --condition-source ptbxl-author-package \
+  --condition-dir ../SE-Diff/data/mimic_iv_ecg_reconstruction_v2/evaluation/ptbxl_diffusets_local1000 \
+  --text-embeddings ../SE-Diff/data/mimic_iv_ecg_reconstruction_v2/inference/diffusion_iclr_camera_ready_best_suite/inputs/diffusets_ptbxl_saved_text_embeddings_float32.npy \
+  --text-embeddings-sha256 6b71e223372c2725c377ec992320df30c136acb4abe50775f84ea987fd0c0019 \
+  --output-dir paper_repro/evaluation/clean_seed2026_e200_base20260822_v1/ptbxl \
+  --base-seed 20260822 --batch-size-per-rank 512
+```
+
+`paper_repro/score_clip64.py` loads only the clean validation-selected CLIP64
+checkpoint. It converts canonical saved waveforms back to the DiffuSETS
+training lead order inside the evaluator. Its FID, manifold precision/recall,
+CLIP, rCLIP, and rFID outputs must be labeled
+`DiffuSETS-clean-CLIP64 seed2026`; they remain a bespoke sensitivity analysis,
+not a model-independent ranking.

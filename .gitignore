@@ -21,3 +21,4 @@ figures/
 paper_repro/artifacts/
 paper_repro/runs/
 paper_repro/smoke/
+paper_repro/evaluation/
