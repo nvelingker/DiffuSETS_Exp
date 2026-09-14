@@ -6,6 +6,12 @@ and record preprocessing while replacing the released all-record package with
 the same deterministic patient roles used by the local ECGDiff and SE-Diff
 experiments. Released learned weights and classifier splits are never loaded.
 
+The completed seed-2026 production run, including exact data/checkpoint paths,
+hashes, selected epochs, parameters, timings, and portable loading examples, is
+recorded in [COMPLETED_RUN_SEED2026.md](COMPLETED_RUN_SEED2026.md). Use that
+clean VAE/CLIP/U-Net suite for all new DiffuSETS work; the author-released
+checkpoints under `prerequisites/` are historical-audit artifacts only.
+
 ## Fixed cohort
 
 `config/patient_disjoint_fsdp2.json` binds every input by SHA-256. The source
