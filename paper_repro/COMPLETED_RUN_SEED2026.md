@@ -1,5 +1,12 @@
 # Completed clean DiffuSETS run: seed 2026
 
+> **Quarantined diffusion checkpoint (2026-09-14):** the VAE, latent cache,
+> repaired-RR data, and CLIP64 checkpoint in this run remain valid. The v1 U-Net
+> used the later release JSON's batch 2,048 / learning rate `1e-4` conflict
+> instead of the paper's batch 512 / `5e-4`, and it is severely undertrained.
+> Do not use the v1 U-Net or its generations for new results. See
+> [DIFFUSION_UNDERTRAINING_AUDIT_20260914.md](DIFFUSION_UNDERTRAINING_AUDIT_20260914.md).
+
 This is the frozen record for the patient-disjoint production run completed on
 2026-09-12. Training used clean Git commit
 `d5bb97448064b53eef7519e82759bed161255b3a` on branch

@@ -18,6 +18,7 @@ from paper_repro.evaluation import (
     diffusets_order_from_canonical,
     load_condition_envelope,
 )
+from paper_repro.infer import main as infer_main
 from paper_repro.infer import make_scheduler, sample_latents
 from paper_repro.score_clip64 import fid_score
 
@@ -60,8 +61,7 @@ def _sample(seeds: tuple[int, ...]) -> torch.Tensor:
         _ZeroDenoiser(),
         text=torch.zeros(count, 1, 1536),
         metadata={
-            name: torch.zeros(count, 1, 1)
-            for name in ("gender", "age", "heart rate")
+            name: torch.zeros(count, 1, 1) for name in ("gender", "age", "heart rate")
         },
         seeds=seeds,
         scheduler=scheduler,
@@ -90,12 +90,27 @@ def test_sampler_rejects_condition_shape_drift() -> None:
             _ZeroDenoiser(),
             text=torch.zeros(1, 1536),
             metadata={
-                name: torch.zeros(1, 1, 1)
-                for name in ("gender", "age", "heart rate")
+                name: torch.zeros(1, 1, 1) for name in ("gender", "age", "heart rate")
             },
             seeds=(1,),
             scheduler=scheduler,
             device=torch.device("cpu"),
+        )
+
+
+def test_quarantined_v1_inference_requires_explicit_audit_flag(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(RuntimeError, match="v1 diffusion U-Net is quarantined"):
+        infer_main(
+            [
+                "--condition-dir",
+                str(tmp_path / "conditions"),
+                "--output-dir",
+                str(tmp_path / "output"),
+                "--condition-source",
+                "clean-mimic",
+            ]
         )
 
 

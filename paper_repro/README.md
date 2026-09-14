@@ -1,16 +1,37 @@
 # Patient-disjoint DiffuSETS reproduction
 
+## Diffusion hyperparameter correction (2026-09-14)
+
+The seed-2026 v1 diffusion U-Net is quarantined after the full test evaluation.
+It used the January 2025 `config/all.json` values (global batch 2,048 and
+learning rate `1e-4`), but the paper Methods and repository README specify
+batch 512 and learning rate `5e-4`. The v1 run therefore made 54,400 optimizer
+updates, and fixed-noise diagnostics show that it remained severely
+undertrained. Do not use its U-Net or its generated samples for new results.
+
+The clean VAE, encoded latents, CLIP64 evaluator, patient split, and repaired-RR
+cache remain valid: none used validation/test records for fitting and the VAE
+reconstruction audit passed. The corrected diffusion-only run is defined by
+`config/patient_disjoint_fsdp2_paper.json` and
+`scripts/train_patient_disjoint_diffusion_paper_fsdp2.sh`. It keeps the
+released-code 200-epoch schedule because the paper does not state an epoch
+count, while taking batch size and learning rate from the paper.
+
+See [DIFFUSION_UNDERTRAINING_AUDIT_20260914.md](DIFFUSION_UNDERTRAINING_AUDIT_20260914.md)
+for the measurements and disposition of the v1 checkpoint.
+
 This directory is the clean training path for DiffuSETS. It retains the
-released VAE, CLIP64, conditional U-Net, objectives, schedules, batch sizes,
-and record preprocessing while replacing the released all-record package with
-the same deterministic patient roles used by the local ECGDiff and SE-Diff
-experiments. Released learned weights and classifier splits are never loaded.
+released VAE, CLIP64, conditional U-Net, objectives, schedules, and record
+preprocessing while replacing the released all-record package with the same
+deterministic patient roles used by the local ECGDiff and SE-Diff experiments.
+Released learned weights and classifier splits are never loaded for training.
 
 The completed seed-2026 production run, including exact data/checkpoint paths,
 hashes, selected epochs, parameters, timings, and portable loading examples, is
-recorded in [COMPLETED_RUN_SEED2026.md](COMPLETED_RUN_SEED2026.md). Use that
-clean VAE/CLIP/U-Net suite for all new DiffuSETS work; the author-released
-checkpoints under `prerequisites/` are historical-audit artifacts only.
+recorded in [COMPLETED_RUN_SEED2026.md](COMPLETED_RUN_SEED2026.md). Its VAE,
+latent cache, and CLIP64 checkpoint remain the clean dependencies for the
+corrected run. Its diffusion U-Net is retained only for audit. Author-released
+checkpoints under `prerequisites/` are also historical-audit artifacts only.
 
 ## Fixed cohort
 
@@ -94,11 +115,12 @@ sets remain size 256; FSDP2 suppresses gradient communication during
 microbatch accumulation. Replicated BatchNorm running statistics are averaged
 across ranks before validation and checkpointing.
 
-Diffusion remains 200 epochs, global batch 2,048, AdamW at `1e-4`, the released
+Corrected diffusion remains 200 epochs, AdamW with the released
 CosineAnnealingLR, 1,000 diffusion steps, linear beta range 0.00085--0.012,
 kernel size 7, seven levels, uniform training timesteps 1--998, and noise
-sum-MSE divided by batch size. VAE and diffusion preserve the released
-unshuffled manifest order; CLIP preserves released shuffling.
+sum-MSE divided by batch size. It uses the paper's global batch 512 and
+learning rate `5e-4`. VAE and diffusion preserve the released unshuffled
+manifest order; CLIP preserves released shuffling.
 
 FP32 is intentional: the released scripts do not enable mixed precision, and
 PyTorch 2.14 FSDP2 parameter-only BF16 casting is incompatible with the
@@ -136,7 +158,9 @@ size.
 
 ## Commands
 
-Run the complete production dependency chain on GPUs 2--9:
+The completed v1 dependency-chain command below is retained for provenance; do
+not relaunch it because its diffusion section contains the conflicting later
+JSON settings:
 
 ```bash
 cd /home/nvelingker/arpa-h/diffusion/DiffuSETS_Exp
@@ -145,10 +169,19 @@ CUDA_VISIBLE_DEVICES=2,3,4,5,6,7,8,9 \
   config/patient_disjoint_fsdp2.json
 ```
 
-The script is resumable and executes manifest verification, waveform/RR
+That script is resumable and executes manifest verification, waveform/RR
 preparation, deterministic posterior-noise creation, artifact audit, VAE
 training, latent encoding, CLIP64 training, and diffusion training in that
 order. It stops on any failed dependency or incomplete cache.
+
+Run the corrected diffusion stage on GPUs 2--9 with:
+
+```bash
+cd /home/nvelingker/arpa-h/diffusion/DiffuSETS_Exp
+CUDA_VISIBLE_DEVICES=2,3,4,5,6,7,8,9 \
+  scripts/train_patient_disjoint_diffusion_paper_fsdp2.sh \
+  config/patient_disjoint_fsdp2_paper.json
+```
 
 Run the end-to-end two-rank fixture with:
 
@@ -163,15 +196,20 @@ CPU/static tests use:
 /home/nvelingker/.conda/envs/ecgdiff/bin/python -m pytest -q tests
 ```
 
-## Clean test inference and learned scoring
+## Quarantined v1 test inference and learned scoring
 
-`paper_repro/infer.py` is the only registered generation path for the clean
-suite. It rejects any VAE or U-Net other than the hash-bound seed-2026 files,
+`paper_repro/infer.py` currently records the generation path used for the
+quarantined v1 evaluation. It rejects any VAE or U-Net other than the v1
+hash-bound seed-2026 files,
 requires a clean Git checkout, preserves one deterministic random stream per
 condition, and uses the released 1,000-step ancestral DDPM defaults. The
 decoder emits the raw DiffuSETS lead order with `aVF` before `aVL`; the adapter
 swaps those two channels before saving the canonical comparison order
 `I, II, III, aVR, aVL, aVF, V1--V6`.
+
+Do not run the commands in this section for a new result. They remain here to
+reproduce the failure audit. The checkpoint locks will be replaced only after
+the corrected U-Net passes the denoising and terminal-latent acceptance checks.
 
 The MIMIC comparison contains all 2,149 native test records from the selected
 ECGDiff e16 run, representing 419 held-out patients. Its records map one-to-one

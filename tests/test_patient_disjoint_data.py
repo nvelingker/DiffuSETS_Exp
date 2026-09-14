@@ -212,3 +212,36 @@ def test_production_config_locks_released_vae_criteria(tmp_path: Path) -> None:
     invalid.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="released FP32"):
         load_config(invalid)
+
+
+def test_corrected_diffusion_config_locks_paper_methods_hyperparameters(
+    tmp_path: Path,
+) -> None:
+    production = (
+        Path(__file__).resolve().parents[1] / "config/patient_disjoint_fsdp2_paper.json"
+    )
+    config = load_config(production)
+    diffusion = config.section("diffusion")
+    assert diffusion["hyperparameter_source"] == "paper_methods"
+    assert diffusion["epochs"] == 200
+    assert diffusion["global_batch_size"] == 512
+    assert diffusion["lr"] == 5e-4
+
+    for key, invalid_value in (("global_batch_size", 2048), ("lr", 1e-4)):
+        raw = json.loads(production.read_text())
+        raw["diffusion"][key] = invalid_value
+        invalid = tmp_path / f"invalid_{key}.json"
+        invalid.write_text(json.dumps(raw))
+        with pytest.raises(ValueError, match="paper_methods"):
+            load_config(invalid)
+
+
+def test_archived_diffusion_config_remains_loadable_as_legacy_recipe() -> None:
+    archived = (
+        Path(__file__).resolve().parents[1] / "config/patient_disjoint_fsdp2.json"
+    )
+    config = load_config(archived)
+    diffusion = config.section("diffusion")
+    assert "hyperparameter_source" not in diffusion
+    assert diffusion["global_batch_size"] == 2048
+    assert diffusion["lr"] == 1e-4

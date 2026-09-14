@@ -1,5 +1,12 @@
 # Clean DiffuSETS full test comparison (2026-09-14)
 
+> **Diagnostic-only result:** this evaluation exposed a hyperparameter-source
+> error in the local v1 diffusion run. The v1 U-Net and all generations below
+> are quarantined from new comparisons. The metrics remain a reproducible
+> record of the failure and must not be reported as the corrected DiffuSETS
+> result. See
+> [DIFFUSION_UNDERTRAINING_AUDIT_20260914.md](DIFFUSION_UNDERTRAINING_AUDIT_20260914.md).
+
 This is the registered same-scorer comparison of the local patient-disjoint
 DiffuSETS seed-2026 suite against ECGDiff epoch 16 and the local SE-Diff v3
 epoch-195 lock. No author-released DiffuSETS checkpoint or saved generation

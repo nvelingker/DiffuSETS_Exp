@@ -1027,6 +1027,9 @@ def train_diffusion(
     )
     criteria = {
         "objective": "released noise-prediction sum MSE divided by batch size",
+        "hyperparameter_source": settings.get(
+            "hyperparameter_source", "released_config_all_legacy"
+        ),
         "timesteps": "uniform integers [1, num_train_steps - 2]",
         "scheduler": "Diffusers DDPM linear beta schedule",
         "optimizer": "AdamW",

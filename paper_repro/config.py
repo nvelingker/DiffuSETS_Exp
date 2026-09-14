@@ -107,10 +107,11 @@ def validate_config(config: ReproConfig) -> None:
             )
 
     diffusion = config.section("diffusion")
-    required_diffusion = {
+    diffusion_source = diffusion.get(
+        "hyperparameter_source", "released_config_all_legacy"
+    )
+    shared_diffusion = {
         "epochs": 200,
-        "global_batch_size": 2048,
-        "lr": 1e-4,
         "num_train_steps": 1000,
         "unet_kernel_size": 7,
         "unet_num_levels": 7,
@@ -119,10 +120,35 @@ def validate_config(config: ReproConfig) -> None:
         "initial_best_loss": 50.0,
         "save_every_epochs": 50,
     }
+    source_specific_diffusion = {
+        # The January 2025 release's executable config conflicts with both the
+        # paper Methods and the README. Keep it loadable only so the archived
+        # seed-2026 v1 run remains auditable.
+        "released_config_all_legacy": {
+            "global_batch_size": 2048,
+            "lr": 1e-4,
+        },
+        # Patterns 2025 Methods: batch size 512 and learning rate 5e-4. The
+        # paper does not state an epoch count, so retain the released code's
+        # 200-epoch schedule above.
+        "paper_methods": {
+            "global_batch_size": 512,
+            "lr": 5e-4,
+        },
+    }
+    if diffusion_source not in source_specific_diffusion:
+        raise ValueError(
+            "diffusion.hyperparameter_source must be one of "
+            f"{sorted(source_specific_diffusion)}; found {diffusion_source!r}"
+        )
+    required_diffusion = {
+        **shared_diffusion,
+        **source_specific_diffusion[diffusion_source],
+    }
     for key, expected in required_diffusion.items():
         if diffusion.get(key) != expected:
             raise ValueError(
-                f"DiffuSETS paper/release default {key!r} must equal {expected!r}"
+                f"DiffuSETS {diffusion_source} setting {key!r} must equal {expected!r}"
             )
 
     distributed = config.section("distributed")
