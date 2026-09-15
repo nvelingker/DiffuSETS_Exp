@@ -98,12 +98,15 @@ def test_sampler_rejects_condition_shape_drift() -> None:
         )
 
 
-def test_quarantined_v1_inference_requires_explicit_audit_flag(
-    tmp_path: Path,
-) -> None:
-    with pytest.raises(RuntimeError, match="v1 diffusion U-Net is quarantined"):
+def test_non_registered_config_is_rejected(tmp_path: Path) -> None:
+    quarantined_config = (
+        Path(__file__).resolve().parents[1] / "config/patient_disjoint_fsdp2.json"
+    )
+    with pytest.raises(ValueError, match="not the registered clean-suite config"):
         infer_main(
             [
+                "--config",
+                str(quarantined_config),
                 "--condition-dir",
                 str(tmp_path / "conditions"),
                 "--output-dir",
