@@ -17,6 +17,7 @@ from diffusers.utils.torch_utils import randn_tensor
 
 from paper_repro.config import load_config
 from paper_repro.evaluation import (
+    ACTIVE_BASE_CONFIG_SHA256,
     ACTIVE_CONFIG_SHA256,
     ACTIVE_SUITE_ID,
     ACTIVE_UNET_SHA256,
@@ -38,7 +39,7 @@ from paper_repro.evaluation import (
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_CONFIG = REPO_ROOT / "config/patient_disjoint_fsdp2.json"
+DEFAULT_CONFIG = REPO_ROOT / "config/patient_disjoint_fsdp2_paper.json"
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -64,14 +65,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--progress-every", type=int, default=100)
     parser.add_argument("--reuse-complete", action="store_true")
     parser.add_argument(
-        "--allow-quarantined-v1-audit",
-        action="store_true",
-        help=(
-            "Permit reproduction of the known-undertrained v1 output for an "
-            "explicit diagnostic audit. Never use this for a new result."
-        ),
-    )
-    parser.add_argument(
         "--allow-dirty-source",
         action="store_true",
         help="Development-only escape hatch. Registered production outputs require clean Git source.",
@@ -91,13 +84,13 @@ def _load_models(
         paths["vae_checkpoint"],
         expected_sha256=ACTIVE_VAE_SHA256,
         expected_stage="vae",
-        config=config,
+        expected_config_sha256=ACTIVE_BASE_CONFIG_SHA256,
     )
     unet_state, _ = validate_active_checkpoint(
         paths["diffusion_checkpoint"],
         expected_sha256=ACTIVE_UNET_SHA256,
         expected_stage="diffusion",
-        config=config,
+        expected_config_sha256=ACTIVE_CONFIG_SHA256,
     )
     decoder_state = vae_state.get("decoder")
     if not isinstance(decoder_state, dict):
@@ -281,12 +274,6 @@ def _validate_reusable_output(
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    if not args.allow_quarantined_v1_audit:
-        raise RuntimeError(
-            "the registered seed-2026 v1 diffusion U-Net is quarantined: it used "
-            "the conflicting released JSON batch/lr instead of the paper Methods. "
-            "Pass --allow-quarantined-v1-audit only to reproduce the archived failure."
-        )
     if args.base_seed < 0 or args.batch_size_per_rank <= 0 or args.progress_every <= 0:
         raise ValueError("seed and batching/progress values must be positive")
     if args.condition_source == "ptbxl-author-package" and (
@@ -294,6 +281,8 @@ def main(argv: list[str] | None = None) -> None:
     ):
         raise ValueError("PTB-XL inference requires explicit text embeddings and SHA-256")
     config = load_config(args.config)
+    # ACTIVE_CONFIG_SHA256 is the corrected paper-hyperparameter diffusion
+    # config; this rejects the quarantined v1 config.
     if config.config_sha256 != ACTIVE_CONFIG_SHA256:
         raise ValueError("inference config is not the registered clean-suite config")
     root_state = repository_state(REPO_ROOT)

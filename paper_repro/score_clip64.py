@@ -13,8 +13,8 @@ from scipy.linalg import sqrtm
 from clip.clip_model import CLIP
 from paper_repro.config import load_config
 from paper_repro.evaluation import (
+    ACTIVE_BASE_CONFIG_SHA256,
     ACTIVE_CLIP_SHA256,
-    ACTIVE_CONFIG_SHA256,
     ACTIVE_SUITE_ID,
     CANONICAL_LEADS,
     DIFFUSETS_LEADS,
@@ -175,13 +175,13 @@ def main(argv: list[str] | None = None) -> None:
         raise ValueError("text embeddings are not finite [record,1536]")
 
     config = load_config(args.config)
-    if config.config_sha256 != ACTIVE_CONFIG_SHA256:
-        raise ValueError("CLIP scoring config is not the active clean-suite config")
+    if config.config_sha256 != ACTIVE_BASE_CONFIG_SHA256:
+        raise ValueError("CLIP scoring config is not the active clean-suite base config")
     state, provenance = validate_active_checkpoint(
         config.paths["clip_checkpoint"],
         expected_sha256=ACTIVE_CLIP_SHA256,
         expected_stage="clip",
-        config=config,
+        expected_config_sha256=ACTIVE_BASE_CONFIG_SHA256,
     )
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     model = CLIP(embed_dim=64)

@@ -20,14 +20,18 @@ from paper_repro.config import ReproConfig
 
 
 SCHEMA = "sediff_reconstruction_v2"
-ACTIVE_SUITE_ID = "diffusets-clean-patient-disjoint-seed2026-v1"
-ACTIVE_CONFIG_SHA256 = "b4f2529a28aa947b050a5d6f8e5c8d4271a90ff13169445b13e8b734adcf8827"
+ACTIVE_SUITE_ID = "diffusets-clean-patient-disjoint-seed2026-paper-v1"
+# The VAE/CLIP stages were trained and frozen under the base config, before
+# the diffusion hyperparameter-source error was found and corrected; their
+# checkpoints legitimately carry that base config's hash in their provenance.
+ACTIVE_BASE_CONFIG_SHA256 = "b4f2529a28aa947b050a5d6f8e5c8d4271a90ff13169445b13e8b734adcf8827"
+ACTIVE_CONFIG_SHA256 = "c9e30607955f6eb5b67a717618c5bd5fe3c028122dd559590ceca3b786f9c119"
 ACTIVE_MANIFEST_SHA256 = "a51858be5dd513dd78cf34dfd2cf58b1f166301404ef7a0da4740b39bfa103bc"
 ACTIVE_LATENT_SHA256 = "ccd1bb70ec720d296f9f7ba52480ac72f911c9fabeb117906d22e2eb769fa99d"
 ACTIVE_HEART_RATE_SHA256 = "7dbebb9c3d00314fa476ae00ae5237fb8fb2840d621120c5ad341dc9f366a4a7"
 ACTIVE_VAE_SHA256 = "5ade85ed4ff7bfac0b6f5196785c2d452d4279e458f59e54fc34242cf5b3ea0a"
 ACTIVE_CLIP_SHA256 = "45774181d91b61b72d78bfa1add3a59572680a1fdc5737d31a293f521fcbea64"
-ACTIVE_UNET_SHA256 = "240dc61fa40d6eaa7db21e29757d368ccf9636d6341d0b36525b8595876747aa"
+ACTIVE_UNET_SHA256 = "6b8a87f731e0588abf6858cf15ef493999c2fa40286ba4b75e9f95d418b1949b"
 ACTIVE_PTBXL_PACKAGE_SHA256 = (
     "00e48314b82d10bcf56993b895b33c5b5bf2f8dd9d03017c8129bef9df4e7be4"
 )
@@ -308,42 +312,46 @@ def validate_active_checkpoint(
     *,
     expected_sha256: str,
     expected_stage: str,
-    config: ReproConfig,
+    expected_config_sha256: str,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
+    # expected_config_sha256 is the config each stage was frozen under: the
+    # base config for vae/clip, the corrected paper config for diffusion.
+    # Callers separately check the run's own --config against whichever of
+    # those it must match for the stage(s) they load.
     require_sha256(path, expected_sha256, f"active {expected_stage} checkpoint")
     state, provenance = load_portable_payload(path)
     if provenance.get("schema") != "diffusets_clean_checkpoint_v1":
         raise ValueError(f"active {expected_stage} checkpoint schema changed")
     if provenance.get("stage") != expected_stage:
         raise ValueError(f"active checkpoint is not a {expected_stage} checkpoint")
-    if provenance.get("config_sha256") != ACTIVE_CONFIG_SHA256:
+    if provenance.get("config_sha256") != expected_config_sha256:
         raise ValueError(f"active {expected_stage} checkpoint config binding changed")
     if provenance.get("manifest_sha256") != ACTIVE_MANIFEST_SHA256:
         raise ValueError(f"active {expected_stage} checkpoint manifest binding changed")
-    if config.config_sha256 != ACTIVE_CONFIG_SHA256:
-        raise ValueError("evaluation configuration differs from the registered clean suite")
     return state, provenance
 
 
 def active_suite_provenance(config: ReproConfig) -> dict[str, Any]:
+    if config.config_sha256 != ACTIVE_CONFIG_SHA256:
+        raise ValueError("evaluation configuration differs from the registered clean suite")
     paths = config.paths
     _, vae = validate_active_checkpoint(
         paths["vae_checkpoint"],
         expected_sha256=ACTIVE_VAE_SHA256,
         expected_stage="vae",
-        config=config,
+        expected_config_sha256=ACTIVE_BASE_CONFIG_SHA256,
     )
     _, clip = validate_active_checkpoint(
         paths["clip_checkpoint"],
         expected_sha256=ACTIVE_CLIP_SHA256,
         expected_stage="clip",
-        config=config,
+        expected_config_sha256=ACTIVE_BASE_CONFIG_SHA256,
     )
     _, unet = validate_active_checkpoint(
         paths["diffusion_checkpoint"],
         expected_sha256=ACTIVE_UNET_SHA256,
         expected_stage="diffusion",
-        config=config,
+        expected_config_sha256=ACTIVE_CONFIG_SHA256,
     )
     if clip.get("vae_checkpoint_sha256") != ACTIVE_VAE_SHA256:
         raise ValueError("clean CLIP does not bind the active VAE")
@@ -415,6 +423,7 @@ def condition_identity_sha256(conditions: EvaluationConditions) -> str:
 
 
 __all__ = [
+    "ACTIVE_BASE_CONFIG_SHA256",
     "ACTIVE_CLIP_SHA256",
     "ACTIVE_CONFIG_SHA256",
     "ACTIVE_HEART_RATE_SHA256",
