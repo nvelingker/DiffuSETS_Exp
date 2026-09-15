@@ -28,7 +28,7 @@ DEFAULT_EVALUATION_ROOT = (
 MODEL_ORDER = ("ecgdiff", "diffusets", "sediff")
 MODEL_LABELS = {
     "ecgdiff": "ECGDiff e16",
-    "diffusets": "DiffuSETS clean e200",
+    "diffusets": "DiffuSETS clean e196",
     "sediff": "SE-Diff v3 e195",
 }
 EXPECTED_SEDIFF_CHECKPOINT_SHA256 = (
@@ -58,7 +58,7 @@ EXPECTED = {
         ),
         "waveforms_sha256": {
             "diffusets": (
-                "362e2a8f307e6034c23b20fb3af06f7bc2daa602af40ad41f7a33ac018439a9f"
+                "f74fa1ccf8ff70ee18b50e4bc94a4da3f648b5a61002dedc286ef47c68f53a8a"
             ),
             "ecgdiff": (
                 "93a437ea8245ae7dda204106167b7cd5c3135ecce60b6aeb9033f3cf58c124af"
@@ -80,7 +80,7 @@ EXPECTED = {
         ),
         "waveforms_sha256": {
             "diffusets": (
-                "f3c0e76c688f6de29e121a49fb0c9783ae9a80fb38b1926c981cfab8b556a672"
+                "e8e84dcc010cfdfbb903dc28b4d5c949504e90d1a054dca62d166a23ea98a530"
             ),
             "ecgdiff": (
                 "c0eba0819aa787b7446efed80d1176ab1c6e987a7076699ba0dad10f46b1ca37"
@@ -175,8 +175,8 @@ def _validate_model_identity(model: str, inference: dict[str, Any]) -> None:
             ACTIVE_UNET_SHA256,
             "DiffuSETS U-Net",
         )
-        _expect(inference.get("checkpoint_epoch"), 200, "DiffuSETS epoch")
-        _expect(inference.get("checkpoint_step"), 54_400, "DiffuSETS step")
+        _expect(inference.get("checkpoint_epoch"), 196, "DiffuSETS epoch")
+        _expect(inference.get("checkpoint_step"), 213_052, "DiffuSETS step")
         _expect(inference.get("base_seed"), 20_260_822, "DiffuSETS base seed")
         _expect(inference.get("inference_steps"), 1000, "DiffuSETS inference steps")
         _expect(inference.get("guidance_scale"), 1.0, "DiffuSETS guidance scale")
@@ -449,7 +449,7 @@ def _table(
     rows: Iterable[tuple[str, str, str, str, str, float]],
 ) -> list[str]:
     lines = [
-        "| Metric | ECGDiff e16 | DiffuSETS clean e200 | SE-Diff v3 e195 |",
+        "| Metric | ECGDiff e16 | DiffuSETS clean e196 | SE-Diff v3 e195 |",
         "| --- | ---: | ---: | ---: |",
     ]
     for label, source, path, direction, pattern, multiplier in rows:
@@ -672,7 +672,7 @@ def render_markdown(report: dict[str, Any]) -> str:
             "",
             f"- DiffuSETS suite `{ACTIVE_SUITE_ID}`: VAE `{ACTIVE_VAE_SHA256}`, CLIP64 ",
             f"  `{ACTIVE_CLIP_SHA256}`, U-Net `{ACTIVE_UNET_SHA256}`. Generation used ",
-            "  epoch 200/step 54,400, base seed 20260822, 1,000-step ancestral DDPM, ",
+            "  epoch 196/step 213,052, base seed 20260822, 1,000-step ancestral DDPM, ",
             "  epsilon prediction, fixed-small variance, predicted-x0 clipping, and no CFG.",
             "- ECGDiff: epoch 16, step 4,624, one locked saved draw per condition.",
             "- SE-Diff: v3 seed 2026 raw epoch 195, checkpoint ",
@@ -845,8 +845,8 @@ def main(argv: list[str] | None = None) -> None:
                 "vae_sha256": ACTIVE_VAE_SHA256,
                 "clip64_sha256": ACTIVE_CLIP_SHA256,
                 "unet_sha256": ACTIVE_UNET_SHA256,
-                "checkpoint_epoch": 200,
-                "checkpoint_step": 54_400,
+                "checkpoint_epoch": 196,
+                "checkpoint_step": 213_052,
             },
             "ecgdiff": {"checkpoint": "epoch 16 / step_00004624"},
             "sediff": {
