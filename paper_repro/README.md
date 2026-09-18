@@ -81,6 +81,123 @@ The repaired rule is:
 The cache records whether each value came from metadata or XQRS. A failed or
 pending row blocks all training; it is never silently removed.
 
+## HEEDB Ada-002 conditions
+
+`paper_repro.prepare_heedb_ada_conditions` prepares DiffuSETS conditions for a
+selected HEEDB CSV or Parquet table. It applies the released
+`utils.text_to_emb.prompt_propcess` template verbatim and verifies that file's
+SHA-256 against the released repository before proceeding. By default, the
+script reads the classification table's ordered `report` fields, strips only
+the whitespace around each pipe-delimited field, and rejoins them with the bare
+`|` delimiter used by the released DiffuSETS loader. It preserves field text,
+case, punctuation, and order. With `--report-source packed`, it instead reads
+the grouped packed HEEDB report, removes packer-added headings and punctuation,
+splits semicolon-joined diagnoses, and joins the recovered diagnoses with `|`.
+Both HEEDB mappings are local because the authors did not provide one.
+
+The script calls `text-embedding-ada-002` and estimates heart rate with
+ECGDeli's QRS-only detector. It preprocesses the ECG once and, matching the
+released DiffuSETS lead-selection rule, uses the first canonical lead with at
+least two valid R peaks. This supports HEEDB records with sequential or partial
+lead coverage and avoids unrelated P/T-delineation failures. The embedding
+request contains only the templated report; sex, age, heart rate, and record
+identifiers remain local scalar conditions.
+
+For a classification cohort that already has a row-aligned waveform cache:
+
+```bash
+OPENAI_API_KEY=... \
+/home/nvelingker/.conda/envs/ecgdiff/bin/python \
+  -m paper_repro.prepare_heedb_ada_conditions \
+  --input /path/to/conditions_seed_2026.parquet \
+  --waveforms /path/to/real_waveforms.npy \
+  --waveform-sample-rate-hz 104 \
+  --ecgdeli-workers 4
+```
+
+The input must contain HEEDB `source_locator` values and, when `--waveforms`
+is used, `waveform_index` values. Without `--waveforms`, the script reads the
+selected records directly from the existing 256-Hz packed store. Outputs are
+`text_embeddings_float32.npy` (`N x 1536`), `metadata_float32.npy` (`N x 3`,
+ordered male/age/heart-rate), their concatenated `N x 1539` dense condition,
+the audited row table, and a hash-bound summary. Use `--prepare-only` to audit
+reports, ECGDeli measurements, and current cache hits/misses without making an
+API request. A default cap of 256 unique cache misses prevents an unexpectedly
+large input from reaching the endpoint; change it explicitly with
+`--max-api-prompts`.
+
+By default, completed packages go to the durable shared tree
+`/home/nvelingker/common-data/arpa-h/diffusion/baselines/diffusets/conditioning/diffusets_heedb_ada002_v1/packages/`.
+The package name combines the input's parent names with a 12-character hash of
+the full job specification, so the same job resolves to the same directory.
+The job hash binds the input table, selected reports and waveforms, metadata
+index, prompt formatter, preparation implementation, and content-addressed
+ECGDeli protocol. An existing package is reused only after current source
+identities, its job hash, and every artifact hash validate. `--output-dir` can
+still select a different destination.
+
+Exact prompt embeddings are cached across inputs and reruns under
+`/home/nvelingker/common-data/arpa-h/diffusion/baselines/diffusets/conditioning/diffusets_heedb_ada002_v1/cache/text-embedding-ada-002/`.
+The cache key binds the cache schema, exact templated prompt, and Ada model.
+Each entry is one atomically replaced NPZ with an internal prompt/model manifest,
+embedding checksum, and ZIP CRC checks, so a partial, misplaced, or silently
+changed vector fails closed before an endpoint is constructed. Only cache
+misses are sent to the embeddings endpoint, and a shared NFS advisory lock
+prevents concurrent jobs from purchasing the same missing prompt twice. There
+is no automatic local fallback. Use `--embedding-cache-dir` only to select an
+explicit alternate persistent cache. The package `summary.json` records the
+cache path, whether it is the shared default, hits, misses, and API prompt count.
+
+### Registered downstream-classification cache (2026-09-18)
+
+The HEEDB downstream-classification inputs used in the current experiments are
+under:
+
+```text
+/home/nvelingker/arpa-h/diffusion/experiments/classification/results/clinical_metadata_20260914/
+  <variant>/artifacts/heedb/<task>/conditions_seed_<seed>.parquet
+  <variant>/artifacts/heedb/real_waveforms.npy
+```
+
+The registered variants are `n10_fixed`, `n10_randomized`, `n30_fixed`, and
+`n30_randomized`; the tasks are `af_flutter`, `lvh`, `mi_pattern`, and `pvc`;
+and the seeds are 2026 through 2028. The 48 condition tables contain 8,640 row
+references and reduce to 314 exact DiffuSETS prompts. All 314 Ada-002 vectors
+are present in the shared cache above. The hash and coverage receipt is:
+
+```text
+/home/nvelingker/common-data/arpa-h/diffusion/baselines/diffusets/conditioning/
+  diffusets_heedb_ada002_v1/manifests/
+  downstream_classification_four_diagnostic_tasks_v1.json
+```
+
+Twelve complete row-aligned packages for `n10_fixed` (four tasks by three
+seeds; 2,280 rows) are already in the shared `packages/` directory. The other
+three variants have every prompt prewarmed in the same cache; running the
+preparer creates their row-aligned metadata and embedding packages without an
+Ada request. Use a zero miss allowance to enforce cache-only operation:
+
+```bash
+cd /home/nvelingker/arpa-h/diffusion/DiffuSETS_Exp
+variant=n30_fixed
+task=af_flutter
+seed=2026
+classification_root=/home/nvelingker/arpa-h/diffusion/experiments/classification/results/clinical_metadata_20260914
+
+/home/nvelingker/.conda/envs/ecgdiff/bin/python \
+  -m paper_repro.prepare_heedb_ada_conditions \
+  --input "$classification_root/$variant/artifacts/heedb/$task/conditions_seed_$seed.parquet" \
+  --waveforms "$classification_root/$variant/artifacts/heedb/real_waveforms.npy" \
+  --waveform-sample-rate-hz 104 \
+  --ecgdeli-workers 4 \
+  --max-api-prompts 0
+```
+
+No OpenAI key is needed when every prompt is cached. These embeddings condition
+the synthetic training draws and are shared by all downstream generator
+methods that use the same prompt. Do not prepare embeddings from test-lock or
+evaluation rows; downstream classifiers consume their ECG waveforms directly.
+
 ## Contamination boundary
 
 | learned component | training records | selection records | policy |
